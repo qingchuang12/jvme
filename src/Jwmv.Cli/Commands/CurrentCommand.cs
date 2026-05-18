@@ -5,16 +5,23 @@ using Spectre.Console.Cli;
 
 namespace Jwmv.Cli.Commands;
 
-public sealed class CurrentCommand(IJavaVersionManager manager, IAppContext appContext, IAnsiConsole console) : AsyncCommand<CurrentCommand.Settings>
+public sealed class CurrentCommand(ISdkVersionManager manager, IAppContext appContext, IAnsiConsole console) : AsyncCommand<CurrentCommand.Settings>
 {
-    public sealed class Settings : CommandSettings;
+    public sealed class Settings : CommandSettings
+    {
+        [CommandArgument(0, "[candidate]")]
+        public string? Candidate { get; init; }
+    }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var current = await manager.ResolveCurrentAsync(null, cancellationToken);
-        if (!current.IsResolved)
+        var selections = string.IsNullOrWhiteSpace(settings.Candidate)
+            ? await manager.ResolveAllCurrentAsync(null, cancellationToken)
+            : [await manager.ResolveCurrentAsync(settings.Candidate, null, cancellationToken)];
+        if (selections.All(selection => !selection.IsResolved))
         {
-            console.MarkupLine("[yellow]No active Java version is currently resolved.[/]");
+            var current = selections.Count > 0 ? selections[0] : null;
+            CommandHelpers.WriteWarning(console, "No active SDK version is currently resolved.");
             if (!string.Equals(appContext.GetEnvironmentVariable(JwmvConstants.ShellIntegrationVariable), "1", StringComparison.Ordinal))
             {
                 console.MarkupLine("[grey]Hint:[/] `jwmv use` only affects the current PowerShell session when its output is evaluated.");
@@ -26,7 +33,7 @@ public sealed class CurrentCommand(IJavaVersionManager manager, IAppContext appC
                 console.MarkupLine("[grey]Shell integration is loaded.[/] Activate one with `jwmv use <version>` or persist one with `jwmv default <version>`.");
             }
 
-            if (!string.IsNullOrWhiteSpace(current.ProjectFilePath))
+            if (!string.IsNullOrWhiteSpace(current?.ProjectFilePath))
             {
                 console.MarkupLine($"Project file found at [grey]{Markup.Escape(current.ProjectFilePath)}[/], but its Java version is not installed.");
             }
@@ -34,20 +41,35 @@ public sealed class CurrentCommand(IJavaVersionManager manager, IAppContext appC
             return 0;
         }
 
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        var displayAlias = await manager.ListInstalledAsync(cancellationToken);
-        var installed = displayAlias.FirstOrDefault(item => string.Equals(item.Alias, current.Alias, StringComparison.OrdinalIgnoreCase));
-        grid.AddRow("Alias", Markup.Escape(installed?.DisplayAlias ?? current.Alias!));
-        grid.AddRow("Source", current.Source.ToString());
-        grid.AddRow("JAVA_HOME", Markup.Escape(current.JavaHome!));
-        if (!string.IsNullOrWhiteSpace(current.ProjectFilePath))
+        var medium = CommandHelpers.IsMediumOrWider(console);
+        var table = CommandHelpers.CreateTable();
+        table.AddColumn(CommandHelpers.Header("Candidate"));
+        table.AddColumn(CommandHelpers.Header("Version"));
+        table.AddColumn(CommandHelpers.Header("Source"));
+        if (medium)
         {
-            grid.AddRow("Project file", Markup.Escape(current.ProjectFilePath));
+            table.AddColumn(CommandHelpers.Header("Home"));
         }
 
-        console.Write(grid);
+        foreach (var current in selections.Where(selection => selection.IsResolved))
+        {
+            var row = new List<string>
+            {
+                CommandHelpers.Candidate(current.CandidateName),
+                CommandHelpers.Alias(current.Alias ?? current.Version),
+                $"[yellow]{Markup.Escape(current.Source.ToString())}[/]"
+            };
+
+            if (medium)
+            {
+                row.Add(CommandHelpers.Muted(current.HomeDirectory));
+            }
+
+            table.AddRow(row.ToArray());
+        }
+
+        console.Write(table);
+        CommandHelpers.WriteSuccess(console, $"{selections.Count(selection => selection.IsResolved)} active SDK selection(s) resolved.");
         return 0;
     }
 }

@@ -5,12 +5,15 @@ using Spectre.Console.Cli;
 
 namespace Jwmv.Cli.Commands;
 
-public sealed class InstallCommand(IJavaVersionManager manager, IAnsiConsole console) : AsyncCommand<InstallCommand.Settings>
+public sealed class InstallCommand(ISdkVersionManager manager, IAnsiConsole console) : AsyncCommand<InstallCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
-        [CommandArgument(0, "[identifier]")]
-        public string? Identifier { get; init; }
+        [CommandArgument(0, "[candidate-or-version]")]
+        public string? CandidateOrVersion { get; init; }
+
+        [CommandArgument(1, "[version]")]
+        public string? Version { get; init; }
 
         [CommandOption("-d|--default")]
         public bool SetDefault { get; init; }
@@ -21,64 +24,48 @@ public sealed class InstallCommand(IJavaVersionManager manager, IAnsiConsole con
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var identifier = settings.Identifier;
+        var (candidateName, version) = CommandHelpers.ResolveCandidateAndVersion(settings.CandidateOrVersion, settings.Version);
         var setDefault = settings.SetDefault;
+        CommandHelpers.WriteHeader(console, $"install {candidateName}");
 
-        if (string.IsNullOrWhiteSpace(identifier))
+        if (string.IsNullOrWhiteSpace(version))
         {
-            var filter = console.Prompt(
-                new TextPrompt<string>("Version or vendor filter?")
-                    .DefaultValue("21"));
-            var packages = await manager.ListAvailableAsync(new JavaCatalogQuery
+            var filter = settings.CandidateOrVersion is null || CommandHelpers.IsKnownCandidate(settings.CandidateOrVersion)
+                ? console.Prompt(new TextPrompt<string>($"Version filter for {candidateName}?").DefaultValue(string.Equals(candidateName, "java", StringComparison.OrdinalIgnoreCase) ? "21" : string.Empty).AllowEmpty())
+                : settings.CandidateOrVersion;
+            var sdkPackages = await manager.ListAvailableAsync(new SdkCatalogQuery
             {
-                IdentifierFilter = filter,
+                CandidateName = candidateName,
+                VersionFilter = filter,
                 ForceRefresh = settings.ForceRefresh
             }, cancellationToken);
 
-            if (packages.Count == 0)
+            if (sdkPackages.Count == 0)
             {
-                console.MarkupLine($"[red]No packages found for[/] [blue]{Markup.Escape(filter)}[/].");
+                CommandHelpers.WriteFailure(console, $"No packages found for {filter}.");
                 return -1;
             }
 
-            identifier = console.Prompt(
+            version = console.Prompt(
                 new SelectionPrompt<string>()
-                    .Title("Select a Java package to install")
+                    .Title($"Select a {candidateName} package to install")
                     .PageSize(12)
                     .UseConverter(alias => alias)
-                    .AddChoices(packages.Select(package => package.Alias)));
+                    .AddChoices(sdkPackages.Select(package => package.Alias)));
 
-            setDefault = console.Confirm("Set it as the default JAVA_HOME for new sessions?");
+            setDefault = console.Confirm($"Set it as the default {candidateName} for new sessions?");
         }
 
-        InstallJavaResult? result = null;
-        await console.Progress()
-            .AutoClear(false)
-            .HideCompleted(false)
-            .Columns(
-            [
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            ])
-            .StartAsync(async progressContext =>
-            {
-                var task = progressContext.AddTask($"[green]Installing {Markup.Escape(identifier!)}[/]", maxValue: 100);
-                var progress = new Progress<InstallProgressUpdate>(update =>
+        var result = await CommandHelpers.RunInstallProgressAsync(
+            console,
+            $"Installing {candidateName} {version}",
+            progress => manager.InstallAsync(new InstallSdkRequest
                 {
-                    task.Description($"[green]{Markup.Escape(update.Status)}[/]");
-                    task.Value(update.Percentage);
-                });
-
-                result = await manager.InstallAsync(new InstallJavaRequest
-                {
-                    Identifier = identifier!,
+                    CandidateName = candidateName,
+                    Version = version!,
                     SetAsDefault = setDefault,
                     ForceCatalogRefresh = settings.ForceRefresh
-                }, progress, cancellationToken);
-            });
+                }, progress, cancellationToken));
 
         if (result is null)
         {
@@ -87,20 +74,21 @@ public sealed class InstallCommand(IJavaVersionManager manager, IAnsiConsole con
 
         if (result.AlreadyInstalled)
         {
-            console.MarkupLine($"[yellow]{Markup.Escape(result.InstalledVersion.DisplayAlias)}[/] is already installed.");
+            CommandHelpers.WriteWarning(console, $"{result.InstalledVersion.CandidateName} {result.InstalledVersion.Alias} is already installed.");
         }
         else
         {
-            console.MarkupLine($"[green]Installed[/] {Markup.Escape(result.InstalledVersion.DisplayAlias)} to [grey]{Markup.Escape(result.InstalledVersion.JavaHome)}[/].");
+            CommandHelpers.WriteSuccess(console, $"Installed {result.InstalledVersion.CandidateName} {result.InstalledVersion.Alias}");
+            CommandHelpers.WriteInfo(console, $"Home: {result.InstalledVersion.HomeDirectory}");
         }
 
         if (result.DefaultWasUpdated)
         {
-            console.MarkupLine("[green]Default JAVA_HOME updated and will take precedence over existing system Java paths in new Windows sessions.[/]");
+            CommandHelpers.WriteSuccess(console, $"Default {result.InstalledVersion.CandidateName} updated for new Windows sessions.");
         }
         else
         {
-            console.MarkupLine($"[grey]Tip:[/] run [blue]jwmv use {Markup.Escape(result.InstalledVersion.DisplayAlias)}[/] from the integrated PowerShell function, or [blue]jwmv default {Markup.Escape(result.InstalledVersion.DisplayAlias)}[/] to persist it.");
+            CommandHelpers.WriteInfo(console, $"Run jwmv use {result.InstalledVersion.CandidateName} {result.InstalledVersion.Alias} for this session, or jwmv default {result.InstalledVersion.CandidateName} {result.InstalledVersion.Alias} to persist it.");
         }
 
         return 0;

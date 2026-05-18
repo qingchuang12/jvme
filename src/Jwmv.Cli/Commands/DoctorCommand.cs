@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Jwmv.Core;
 using Jwmv.Core.Abstractions;
 using Jwmv.Core.Models;
@@ -33,15 +34,15 @@ public sealed class DoctorCommand(
         var defaultBin = Environment.GetEnvironmentVariable(JwmvConstants.DefaultBinVariable, EnvironmentVariableTarget.User);
         var whereJava = await RunWhereAsync("java", cancellationToken);
 
-        console.Write(new Rule("[yellow]jwmv doctor[/]").RuleStyle("grey"));
+        CommandHelpers.WriteHeader(console, "jwmv doctor");
 
         var statusGrid = new Grid();
         statusGrid.AddColumn();
         statusGrid.AddColumn();
         statusGrid.AddRow("Shell integration", IsEnabled(appContext.GetEnvironmentVariable(JwmvConstants.ShellIntegrationVariable)));
         statusGrid.AddRow("Profile", Markup.Escape(profilePath));
-        statusGrid.AddRow("Profile contains jwmv block", profileIntegrated ? "[green]Yes[/]" : "[red]No[/]");
-        statusGrid.AddRow("Installed versions", installed.Count.ToString());
+        statusGrid.AddRow("Profile contains jwmv block", profileIntegrated ? $"{CommandHelpers.CheckBox("green", "x")} [green]Yes[/]" : $"{CommandHelpers.CheckBox("red", "x")} [red]No[/]");
+        statusGrid.AddRow("Installed versions", installed.Count.ToString(CultureInfo.InvariantCulture));
         statusGrid.AddRow("Resolved alias", current.IsResolved ? Markup.Escape(current.Alias!) : "[yellow]None[/]");
         statusGrid.AddRow("Resolved source", current.Source.ToString());
         statusGrid.AddRow("Process JAVA_HOME", EscapeOrPlaceholder(processJavaHome));
@@ -51,7 +52,7 @@ public sealed class DoctorCommand(
         console.Write(statusGrid);
         console.WriteLine();
 
-        var pathTable = new Table().Border(TableBorder.Rounded);
+        var pathTable = CommandHelpers.CreateTable();
         pathTable.AddColumn("Scope");
         pathTable.AddColumn("First entries");
         pathTable.AddRow(
@@ -63,7 +64,7 @@ public sealed class DoctorCommand(
         console.Write(pathTable);
         console.WriteLine();
 
-        var javaTable = new Table().Border(TableBorder.Rounded);
+        var javaTable = CommandHelpers.CreateTable();
         javaTable.AddColumn("java.exe order");
         if (whereJava.Count == 0)
         {
@@ -83,7 +84,7 @@ public sealed class DoctorCommand(
         if (issues.Count == 0)
         {
             console.WriteLine();
-            console.MarkupLine("[green]Doctor did not detect any obvious PATH or JAVA_HOME conflicts.[/]");
+            CommandHelpers.WriteSuccess(console, "Doctor did not detect any obvious PATH or JAVA_HOME conflicts.");
             return 0;
         }
 
@@ -147,8 +148,8 @@ public sealed class DoctorCommand(
 
     private static string IsEnabled(string? value) =>
         string.Equals(value, "1", StringComparison.Ordinal)
-            ? "[green]Enabled[/]"
-            : "[yellow]Disabled[/]";
+            ? $"{CommandHelpers.CheckBox("green", "x")} [green]Enabled[/]"
+            : $"{CommandHelpers.CheckBox("yellow", "!")} [yellow]Disabled[/]";
 
     private static async Task<IReadOnlyList<string>> RunWhereAsync(string command, CancellationToken cancellationToken)
     {

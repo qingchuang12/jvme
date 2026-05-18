@@ -4,35 +4,44 @@ using Spectre.Console.Cli;
 
 namespace Jwmv.Cli.Commands;
 
-public sealed class UninstallCommand(IJavaVersionManager manager, IAnsiConsole console) : AsyncCommand<UninstallCommand.Settings>
+public sealed class UninstallCommand(ISdkVersionManager manager, IAnsiConsole console) : AsyncCommand<UninstallCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
-        [CommandArgument(0, "[identifier]")]
-        public string? Identifier { get; init; }
+        [CommandArgument(0, "[candidate-or-version]")]
+        public string? CandidateOrVersion { get; init; }
+
+        [CommandArgument(1, "[version]")]
+        public string? Version { get; init; }
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var identifier = settings.Identifier;
-        if (string.IsNullOrWhiteSpace(identifier))
+        var (candidateName, version) = CommandHelpers.ResolveCandidateAndVersion(settings.CandidateOrVersion, settings.Version);
+        if (string.IsNullOrWhiteSpace(version))
         {
-            var installed = await manager.ListInstalledAsync(cancellationToken);
+            var installed = await manager.ListInstalledAsync(CommandHelpers.IsKnownCandidate(settings.CandidateOrVersion) ? candidateName : null, cancellationToken);
             if (installed.Count == 0)
             {
-                console.MarkupLine("[yellow]No Java versions are installed locally.[/]");
+                CommandHelpers.WriteWarning(console, "No SDK versions are installed locally.");
                 return 0;
             }
 
-            identifier = console.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("Select a Java version to uninstall")
+            var selected = console.Prompt(
+                new SelectionPrompt<InstalledChoice>()
+                    .Title("Select an SDK version to uninstall")
                     .PageSize(10)
-                    .AddChoices(installed.OrderBy(item => item.DisplayAlias).Select(item => item.DisplayAlias)));
+                    .UseConverter(choice => $"{choice.CandidateName} {choice.Alias}")
+                    .AddChoices(installed.OrderBy(item => item.CandidateName, StringComparer.OrdinalIgnoreCase).ThenBy(item => item.Alias, StringComparer.OrdinalIgnoreCase).Select(item => new InstalledChoice(item.CandidateName, item.Alias))));
+            candidateName = selected.CandidateName;
+            version = selected.Alias;
         }
 
-        await manager.UninstallAsync(identifier, cancellationToken);
-        console.MarkupLine($"[green]Removed[/] {Markup.Escape(identifier)} and its local metadata/cache.");
+        CommandHelpers.WriteHeader(console, $"uninstall {candidateName} {version}");
+        await CommandHelpers.RunProgressAsync(console, $"Removing {candidateName} {version}", () => manager.UninstallAsync(candidateName, version, cancellationToken));
+        CommandHelpers.WriteSuccess(console, $"Removed {candidateName} {version} and its local metadata/cache.");
         return 0;
     }
+
+    private sealed record InstalledChoice(string CandidateName, string Alias);
 }

@@ -1,48 +1,67 @@
 using Jwmv.Core.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using System.Globalization;
 
 namespace Jwmv.Cli.Commands;
 
-public sealed class InstalledCommand(IJavaVersionManager manager, IAnsiConsole console) : AsyncCommand<InstalledCommand.Settings>
+public sealed class InstalledCommand(ISdkVersionManager manager, IAnsiConsole console) : AsyncCommand<InstalledCommand.Settings>
 {
-    public sealed class Settings : CommandSettings;
+    public sealed class Settings : CommandSettings
+    {
+        [CommandArgument(0, "[candidate]")]
+        public string? Candidate { get; init; }
+    }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var installed = await manager.ListInstalledAsync(cancellationToken);
-        var current = await manager.ResolveCurrentAsync(null, cancellationToken);
+        var installed = await manager.ListInstalledAsync(settings.Candidate, cancellationToken);
+        var currents = await manager.ResolveAllCurrentAsync(null, cancellationToken);
 
         if (installed.Count == 0)
         {
-            console.MarkupLine("[yellow]No Java versions are installed locally.[/]");
-            console.MarkupLine("[grey]Tip:[/] use [blue]jwmv install[/] to install one interactively.");
+            CommandHelpers.WriteWarning(console, "No SDK versions are installed locally.");
+            CommandHelpers.WriteInfo(console, "Tip: use jwmv install to install one interactively.");
             return 0;
         }
 
-        var table = new Table().Border(TableBorder.Rounded);
-        table.AddColumn("Alias");
-        table.AddColumn("Java");
-        table.AddColumn("Vendor");
-        table.AddColumn("Installed");
-        table.AddColumn("Status");
-
-        foreach (var item in installed.OrderByDescending(item => item.JavaVersion).ThenBy(item => item.DistributionAlias))
+        var medium = CommandHelpers.IsMediumOrWider(console);
+        var table = CommandHelpers.CreateTable();
+        table.AddColumn(CommandHelpers.Header("Candidate"));
+        table.AddColumn(CommandHelpers.Header("Version"));
+        table.AddColumn(CommandHelpers.Header("Alias"));
+        if (medium)
         {
-            var status = string.Equals(current.Alias, item.Alias, StringComparison.OrdinalIgnoreCase)
-                ? $"[green]{current.Source}[/]"
-                : "-";
+            table.AddColumn(CommandHelpers.Header("Installed"));
+        }
 
-            table.AddRow(
-                item.DisplayAlias,
-                item.JavaVersion,
-                item.DistributionAlias,
-                item.InstalledAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
-                status);
+        table.AddColumn(CommandHelpers.Header("Status"));
+
+        foreach (var item in installed.OrderBy(item => item.CandidateName, StringComparer.OrdinalIgnoreCase).ThenByDescending(item => item.Version, StringComparer.OrdinalIgnoreCase))
+        {
+            var current = currents.FirstOrDefault(selection => string.Equals(selection.CandidateName, item.CandidateName, StringComparison.OrdinalIgnoreCase));
+            var status = string.Equals(current?.Alias, item.Alias, StringComparison.OrdinalIgnoreCase)
+                ? $"[green]{current?.Source.ToString()}[/]"
+                : "[grey]-[/]";
+
+            var row = new List<string>
+            {
+                CommandHelpers.Candidate(item.CandidateName),
+                CommandHelpers.Version(item.Version),
+                CommandHelpers.Alias(item.Alias)
+            };
+
+            if (medium)
+            {
+                row.Add(CommandHelpers.Muted(item.InstalledAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)));
+            }
+
+            row.Add(status);
+            table.AddRow(row.ToArray());
         }
 
         console.Write(table);
-        console.MarkupLine($"[grey]{installed.Count} installed Java version(s).[/]");
+        CommandHelpers.WriteSuccess(console, $"{installed.Count} installed SDK version(s).");
         return 0;
     }
 }

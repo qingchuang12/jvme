@@ -56,7 +56,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Publish single-file binary
         shell: pwsh
@@ -156,7 +156,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Pack NuGet package
         run: >
@@ -205,7 +205,25 @@ jobs:
         working-directory: npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance || echo "Package version already published, skipping."
+        shell: bash
+        run: |
+          set +e
+          output="$(npm publish --access public --provenance 2>&1)"
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if printf '%s\n' "$output" | grep -Eq 'EPUBLISHCONFLICT|previously published versions'; then
+            echo "Package version already published, skipping."
+            exit 0
+          fi
+
+          exit "$status"
 
   # ── Submit winget manifest via wingetcreate ────────────────────────────
   publish-winget:
