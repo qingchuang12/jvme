@@ -6,6 +6,7 @@ public static class JwmvConstants
     public const string ProjectFileName = ".jwmvrc";
     public const string ConfigFileName = "config.json";
     public const string CatalogCacheFileName = "catalog.json";
+    public const string SdkCatalogCacheFileName = "catalog-v2.json";
     public const string ArchivesDirectoryName = "archives";
     public const string CandidatesDirectoryName = "candidates";
     public const string ManifestsDirectoryName = "manifests";
@@ -19,4 +20,6 @@ public static class JwmvConstants
     public const string DefaultAliasVariable = "JWVM_DEFAULT_JAVA_ALIAS";
     public const string DefaultHomeVariable = "JWVM_DEFAULT_JAVA_HOME";
     public const string DefaultBinVariable = "JWVM_DEFAULT_JAVA_BIN";
+    public const string GenericActiveVariablePrefix = "JWMV_ACTIVE";
+    public const string GenericDefaultVariablePrefix = "JWMV_DEFAULT";
 }

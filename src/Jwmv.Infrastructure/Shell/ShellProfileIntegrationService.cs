@@ -4,7 +4,7 @@ using System.Diagnostics;
 
 namespace Jwmv.Infrastructure.Shell;
 
-public sealed class ShellProfileIntegrationService(IAppContext appContext, IJavaVersionManager javaVersionManager) : IShellProfileIntegrationService
+public sealed class ShellProfileIntegrationService(IAppContext appContext, ISdkVersionManager sdkVersionManager) : IShellProfileIntegrationService
 {
     private const string StartMarker = "# >>> jwmv initialize >>>";
     private const string EndMarker = "# <<< jwmv initialize <<<";
@@ -21,7 +21,7 @@ public sealed class ShellProfileIntegrationService(IAppContext appContext, IJava
             ? GetProfilePath(shellKind)
             : Path.GetFullPath(profilePath);
 
-        var bootstrap = await javaVersionManager.BuildShellInitScriptAsync(shellKind, cancellationToken);
+        var bootstrap = await sdkVersionManager.BuildShellInitScriptAsync(shellKind, cancellationToken);
         var managedBlock = $"{StartMarker}{Environment.NewLine}{bootstrap.TrimEnd()}{Environment.NewLine}{EndMarker}";
 
         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
