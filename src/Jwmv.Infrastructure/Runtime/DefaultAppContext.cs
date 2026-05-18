@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Jwmv.Core.Abstractions;
 
@@ -13,11 +12,24 @@ public sealed class DefaultAppContext : IAppContext
 
     public Architecture ProcessArchitecture => RuntimeInformation.ProcessArchitecture;
 
-    public string ExecutablePath =>
-        Environment.ProcessPath
-        ?? Assembly.GetEntryAssembly()?.Location
-        ?? throw new InvalidOperationException("Unable to resolve the current executable path.");
+    public string ExecutablePath => ResolveExecutablePath();
 
     public string? GetEnvironmentVariable(string variableName) =>
         Environment.GetEnvironmentVariable(variableName);
+
+    private static string ResolveExecutablePath()
+    {
+        if (!string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        {
+            return Environment.ProcessPath;
+        }
+
+        var commandPath = Environment.GetCommandLineArgs().FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(commandPath))
+        {
+            return Path.GetFullPath(commandPath, AppContext.BaseDirectory);
+        }
+
+        throw new InvalidOperationException("Unable to resolve the current executable path.");
+    }
 }
