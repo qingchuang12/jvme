@@ -37,16 +37,16 @@ public sealed class SelfUpdateCommand(ISelfUpdateService selfUpdateService, IAns
             Force = settings.Force
         }, cancellationToken);
 
-        var table = new Table().Border(TableBorder.Rounded);
-        table.AddColumn("Field");
-        table.AddColumn("Value");
-        table.AddRow("Repository", checkResult.Repository);
-        table.AddRow("Current version", checkResult.CurrentVersion);
-        table.AddRow("Target version", checkResult.TargetVersion);
-        table.AddRow("Release tag", checkResult.ReleaseTag);
-        table.AddRow("Asset", checkResult.AssetName);
-        table.AddRow("Release page", Markup.Escape(checkResult.ReleasePageUri.ToString()));
-        table.AddRow("Update available", checkResult.IsUpdateAvailable ? "[green]Yes[/]" : "[yellow]No[/]");
+        var table = CommandHelpers.CreateTable();
+        table.AddColumn(CommandHelpers.Header("Field"));
+        table.AddColumn(CommandHelpers.Header("Value"));
+        table.AddRow("Repository", CommandHelpers.Text(checkResult.Repository));
+        table.AddRow("Current version", CommandHelpers.Version(checkResult.CurrentVersion));
+        table.AddRow("Target version", CommandHelpers.Version(checkResult.TargetVersion));
+        table.AddRow("Release tag", CommandHelpers.Alias(checkResult.ReleaseTag));
+        table.AddRow("Asset", CommandHelpers.Text(checkResult.AssetName));
+        table.AddRow("Release page", CommandHelpers.Url(checkResult.ReleasePageUri));
+        table.AddRow("Update available", checkResult.IsUpdateAvailable ? $"{CommandHelpers.CheckBox("green", "x")} [green]Yes[/]" : $"{CommandHelpers.CheckBox("yellow", "!")} [yellow]No[/]");
         console.Write(table);
 
         if (settings.CheckOnly)
@@ -56,7 +56,7 @@ public sealed class SelfUpdateCommand(ISelfUpdateService selfUpdateService, IAns
 
         if (!checkResult.IsUpdateAvailable && !settings.Force)
         {
-            console.MarkupLine("[green]jwmv is already up to date.[/]");
+            CommandHelpers.WriteSuccess(console, "jwmv is already up to date.");
             return 0;
         }
 
@@ -65,50 +65,31 @@ public sealed class SelfUpdateCommand(ISelfUpdateService selfUpdateService, IAns
             var confirmed = console.Confirm($"Update jwmv from {checkResult.CurrentVersion} to {checkResult.TargetVersion}?");
             if (!confirmed)
             {
-                console.MarkupLine("[yellow]Self-update cancelled.[/]");
+                CommandHelpers.WriteWarning(console, "Self-update cancelled.");
                 return 0;
             }
         }
 
-        SelfUpdateResult? result = null;
-        await console.Progress()
-            .AutoClear(false)
-            .HideCompleted(false)
-            .Columns(
-            [
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            ])
-            .StartAsync(async progressContext =>
-            {
-                var task = progressContext.AddTask("[green]Updating jwmv[/]", maxValue: 100);
-                var progress = new Progress<SelfUpdateProgressUpdate>(update =>
-                {
-                    task.Description($"[green]{Markup.Escape(update.Status)}[/]");
-                    task.Value(update.Percentage);
-                });
-
-                result = await selfUpdateService.ApplyUpdateAsync(checkResult, settings.RestartAfterUpdate, progress, cancellationToken);
-            });
+        var result = await CommandHelpers.RunSelfUpdateProgressAsync(
+            console,
+            "Updating jwmv",
+            progress => selfUpdateService.ApplyUpdateAsync(checkResult, settings.RestartAfterUpdate, progress, cancellationToken));
 
         if (result is null)
         {
             return -1;
         }
 
-        console.MarkupLine($"[green]jwmv {Markup.Escape(result.TargetVersion)} has been staged.[/]");
-        console.MarkupLine($"[grey]Executable:[/] [blue]{Markup.Escape(result.ExecutablePath)}[/]");
-        console.MarkupLine("[grey]The updater will replace the binary as soon as the current process fully exits.[/]");
+        CommandHelpers.WriteSuccess(console, $"jwmv {result.TargetVersion} has been staged.");
+        CommandHelpers.WriteInfo(console, $"Executable: {result.ExecutablePath}");
+        CommandHelpers.WriteInfo(console, "The updater will replace the binary as soon as the current process fully exits.");
         if (result.RestartScheduled)
         {
-            console.MarkupLine("[grey]A new jwmv process will be started automatically after the replacement finishes.[/]");
+            CommandHelpers.WriteInfo(console, "A new jwmv process will be started automatically after the replacement finishes.");
         }
         else
         {
-            console.MarkupLine("[grey]Next step:[/] open a new shell after this command returns and run [blue]jwmv --version[/].");
+            CommandHelpers.WriteInfo(console, "Next step: open a new shell after this command returns and run jwmv --version.");
         }
 
         return 0;

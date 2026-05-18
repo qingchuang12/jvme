@@ -28,8 +28,9 @@ public sealed class FlushCommand(IJavaVersionManager manager, IAnsiConsole conso
             IncludeCatalog = settings.IncludeCatalog
         };
 
-        await manager.FlushAsync(request, cancellationToken);
-        console.MarkupLine("[green]Requested cache directories were flushed.[/]");
+        CommandHelpers.WriteHeader(console, "flush");
+        await CommandHelpers.RunProgressAsync(console, "Flushing requested cache directories", () => manager.FlushAsync(request, cancellationToken));
+        CommandHelpers.WriteSuccess(console, "Requested cache directories were flushed.");
         return 0;
     }
 }

@@ -1,6 +1,6 @@
 # jwmv — Java Version Manager for Windows
 
-A fast, lightweight CLI tool to install, manage, and switch between multiple Java (JDK) versions on Windows. Built with .NET 8, inspired by tools like [SDKMAN!](https://sdkman.io/) and [nvm](https://github.com/nvm-sh/nvm).
+A fast, lightweight CLI tool to install, manage, and switch between Java/JDK and JVM toolchain versions on Windows. Built with .NET 8, inspired by tools like [SDKMAN!](https://sdkman.io/) and [nvm](https://github.com/nvm-sh/nvm).
 
 [![CI](https://github.com/stescobedo92/jwmv/actions/workflows/ci.yml/badge.svg)](https://github.com/stescobedo92/jwmv/actions/workflows/ci.yml)
 
@@ -8,8 +8,10 @@ A fast, lightweight CLI tool to install, manage, and switch between multiple Jav
 
 ## Features
 
-- **Install any JDK** — Temurin, Zulu, GraalVM, Microsoft, Corretto, Liberica, SAP, Oracle and more via [Foojay Disco API](https://api.foojay.io/)
-- **Switch versions instantly** — per-session, per-project (`.jwmvrc`), or set a persistent default
+- **Install JDKs and JVM SDKs** — Java via [Foojay Disco API](https://api.foojay.io/), plus Gradle, Maven, and Kotlin from official release feeds
+- **Switch versions instantly** — per-session, per-project (`.jwmvrc`), or set persistent defaults per candidate
+- **SDKMAN-style candidates** — list and install supported candidates with `jwmv candidates`, `jwmv list gradle`, and `jwmv install maven 3.9.15`
+- **Verified downloads** — validates supported SHA-256/SHA-512 checksums before extraction
 - **Shell integration** — PowerShell profile bootstrap for automatic version switching
 - **Self-update** — update jwmv itself from GitHub Releases
 - **Diagnostics** — `doctor` command detects PATH conflicts and misconfigurations
@@ -64,6 +66,7 @@ Expand-Archive jwmv-win-x64.zip -DestinationPath "$HOME\.jwmv\bin"
 
 ```powershell
 # See what's available
+jwmv candidates
 jwmv list
 
 # Install Java 21 (Temurin) and set it as default
@@ -76,54 +79,85 @@ java -version
 # Install another version
 jwmv install 17-zulu
 
+# Install build tooling
+jwmv install gradle 9.5.1
+jwmv install maven 3.9.15
+jwmv install kotlin 2.3.21
+
 # Switch for this session
 jwmv use 17-zulu
+jwmv use gradle 9.5.1
 ```
 
 ---
 
 ## Commands
 
-### `jwmv list [filter]`
+### `jwmv candidates [filter]`
 
-List available JDK distributions from the Foojay catalog.
+List supported SDK installation candidates.
 
 ```powershell
-# List all available JDKs
-jwmv list
+jwmv candidates
+jwmv candidates java
+```
 
-# Filter by major version
+| Candidate | Source |
+|-----------|--------|
+| `java`   | Foojay Disco API |
+| `gradle` | Gradle services version feed |
+| `maven`  | Maven Central metadata |
+| `kotlin` | JetBrains Kotlin GitHub Releases |
+
+---
+
+### `jwmv list [candidate] [filter]`
+
+List available SDK versions. If the first argument is not a known candidate, it is treated as a legacy Java filter.
+
+```powershell
+# List Java versions
+jwmv list java
+
+# Legacy Java shorthand
 jwmv list 21
 
-# Filter by distribution
-jwmv list tem
+# List Gradle versions
+jwmv list gradle
 
-# Filter by version + distribution
-jwmv list 17-zulu
+# Filter by version
+jwmv list maven 3.9
 
 # Force catalog refresh
-jwmv list --refresh
+jwmv list kotlin --refresh
 ```
 
 **Aliases:** `ls`
 
 | Option          | Description                        |
 |-----------------|------------------------------------|
+| `[candidate]`   | Optional candidate name (`java`, `gradle`, `maven`, `kotlin`) |
 | `[filter]`      | Optional version/distribution filter |
 | `-r, --refresh` | Force refresh the catalog cache    |
 
 ---
 
-### `jwmv install [identifier]`
+### `jwmv install [candidate] [version]`
 
-Install a JDK version. Runs interactively if no identifier is provided.
+Install an SDK version. Java keeps the previous shorthand syntax for compatibility.
 
 ```powershell
 # Interactive mode — prompts for filter and selection
 jwmv install
 
-# Install a specific version
+# Java legacy shorthand
 jwmv install 21-tem
+
+# Explicit candidate syntax
+jwmv install java 21-tem
+jwmv install gradle 9.5.1
+jwmv install maven 3.9.15
+jwmv install kotlin 2.3.21
 
 # Install and set as the default JAVA_HOME
 jwmv install 21.0.4-tem --default
@@ -134,8 +168,9 @@ jwmv install 17-zulu --refresh
 
 | Option          | Description                                |
 |-----------------|--------------------------------------------|
-| `[identifier]`  | Version identifier (e.g. `21-tem`, `17-zulu`) |
-| `-d, --default` | Set as default JAVA_HOME after install     |
+| `[candidate]`   | Candidate name, optional for Java shorthand |
+| `[version]`     | Candidate version or Java identifier |
+| `-d, --default` | Set as default SDK after install     |
 | `-r, --refresh` | Force refresh the catalog before install   |
 
 **Identifier format:** `<version>-<distribution>` where distribution is a short alias:
@@ -154,9 +189,9 @@ jwmv install 17-zulu --refresh
 
 ---
 
-### `jwmv uninstall [identifier]`
+### `jwmv uninstall [candidate] [version]`
 
-Remove an installed JDK version.
+Remove an installed SDK version.
 
 ```powershell
 # Interactive selection
@@ -164,31 +199,37 @@ jwmv uninstall
 
 # Remove a specific version
 jwmv uninstall 17-zulu
+jwmv uninstall gradle 9.5.1
 ```
 
 **Aliases:** `remove`, `delete`, `rm`
 
 ---
 
-### `jwmv installed`
+### `jwmv installed [candidate]`
 
-List all locally installed JDK versions.
+List locally installed SDK versions.
 
 ```powershell
 jwmv installed
+jwmv installed java
+jwmv installed gradle
 ```
 
 **Aliases:** `local`
 
 ---
 
-### `jwmv use <identifier>`
+### `jwmv use [candidate] <version>`
 
-Activate a JDK for the current shell session. Does **not** modify the persistent default.
+Activate an SDK for the current shell session. Does **not** modify the persistent default.
 
 ```powershell
 # Switch to Java 17 for this session
 jwmv use 17-zulu
+
+# Switch Gradle for this session
+jwmv use gradle 9.5.1
 
 # Specify shell explicitly
 jwmv use 21-tem --shell powershell
@@ -198,43 +239,49 @@ jwmv use 21-tem --shell powershell
 
 | Option           | Description                   |
 |------------------|-------------------------------|
-| `<identifier>`   | Version to activate (required) |
+| `[candidate]`    | Candidate name, optional for Java shorthand |
+| `<version>`      | Version to activate |
 | `--shell <SHELL>` | Target shell (default: powershell) |
 
 ---
 
-### `jwmv default <identifier>`
+### `jwmv default [candidate] <version>`
 
-Set the persistent default JAVA_HOME for all new shell sessions.
+Set the persistent default SDK version for all new shell sessions.
 
 ```powershell
 # Set Java 21 Temurin as the system-wide default
 jwmv default 21-tem
+
+# Set Maven as the default
+jwmv default maven 3.9.15
 ```
 
-This updates the Windows **User** environment variables (`JAVA_HOME`, `PATH`) and broadcasts the change so new terminals pick it up immediately.
+This updates the Windows **User** environment variables (`JAVA_HOME`, `GRADLE_HOME`, `MAVEN_HOME`, or `KOTLIN_HOME` plus `PATH`) and broadcasts the change so new terminals pick it up immediately.
 
 ---
 
-### `jwmv current`
+### `jwmv current [candidate]`
 
-Show the currently active Java version and how it was resolved.
+Show the currently active SDK versions and how they were resolved.
 
 ```powershell
 jwmv current
+jwmv current java
+jwmv current gradle
 ```
 
 Output shows:
-- Active version alias
+- Candidate and active version alias
 - Resolution source: **Default**, **Session**, or **Project**
-- Resolved `JAVA_HOME` and `bin` paths
+- Resolved home and `bin` paths
 - Project `.jwmvrc` path (if applicable)
 
 ---
 
-### `jwmv home [identifier]`
+### `jwmv home [candidate] [version]`
 
-Print the `JAVA_HOME` path for a version. Useful for scripting.
+Print the SDK home path for a version. Useful for scripting.
 
 ```powershell
 # Current JAVA_HOME
@@ -242,6 +289,9 @@ jwmv home
 
 # JAVA_HOME for a specific version
 jwmv home 17-zulu
+
+# Gradle home for a specific version
+jwmv home gradle 9.5.1
 
 # Use in scripts
 $env:JAVA_HOME = $(jwmv home 21-tem)
@@ -265,7 +315,7 @@ jwmv upgrade
 
 ### `jwmv update`
 
-Refresh the local catalog cache from the Foojay API.
+Refresh the local catalog cache from all SDK providers.
 
 ```powershell
 jwmv update
@@ -336,6 +386,12 @@ jwmv env
 # Emit initialization script
 jwmv env --init
 
+# Create .jwmvrc from active SDKs
+jwmv env init
+
+# Install missing SDKs declared in .jwmvrc
+jwmv env install
+
 # Emit for a specific directory
 jwmv env --cwd ./my-project
 ```
@@ -345,6 +401,8 @@ jwmv env --cwd ./my-project
 | `--shell <SHELL>` | Target shell                           |
 | `--cwd <PATH>`   | Working directory to scan for .jwmvrc   |
 | `--init`          | Emit shell initialization script       |
+| `init`            | Create `.jwmvrc` from active SDKs     |
+| `install`         | Install missing SDKs from `.jwmvrc`   |
 
 ---
 
@@ -413,7 +471,7 @@ jwmv selfupdate --repository owner/repo
 
 ## Shell Integration
 
-jwmv can automatically switch Java versions when you `cd` into a project with a `.jwmvrc` file.
+jwmv can automatically switch SDK versions when you `cd` into a project with a `.jwmvrc` file.
 
 ### Setup
 
@@ -423,8 +481,8 @@ jwmv integrate
 
 This adds a managed block to your PowerShell profile (`$PROFILE`) that bootstraps jwmv on every new terminal session. The integration:
 
-1. Reads the current or project-specific Java version
-2. Sets `JAVA_HOME` and `PATH` automatically
+1. Reads the current or project-specific SDK versions
+2. Sets `JAVA_HOME`, `GRADLE_HOME`, `MAVEN_HOME`, `KOTLIN_HOME`, and `PATH` automatically
 3. Switches versions seamlessly as you navigate between projects
 
 ### Manual integration
@@ -440,15 +498,20 @@ if ($jwmvInit) { $jwmvInit | Invoke-Expression }
 
 ---
 
-## Per-Project Java Version
+## Per-Project SDK Versions
 
 Create a `.jwmvrc` file in your project root:
 
 ```
-21-tem
+java=21-tem
+gradle=9.5.1
+maven=3.9.15
+kotlin=2.3.21
 ```
 
-When shell integration is active, jwmv automatically activates this version when you enter the directory. The resolution order is:
+Legacy Java-only files containing just `21-tem` are still accepted and treated as `java=21-tem`.
+
+When shell integration is active, jwmv automatically activates these versions when you enter the directory. The resolution order for each candidate is:
 
 1. **Session** — set via `jwmv use`
 2. **Project** — from `.jwmvrc` (walks up the directory tree)
@@ -464,13 +527,20 @@ jwmv stores its data under `~/.jwmv/`:
 ~/.jwmv/
 ├── config.json          # User configuration
 ├── candidates/
-│   └── java/            # Installed JDKs
-├── archives/            # Downloaded ZIP files
+│   ├── java/            # Installed JDKs
+│   ├── gradle/
+│   ├── maven/
+│   └── kotlin/
+├── archives/            # Downloaded ZIP files, grouped by candidate
 ├── tmp/                 # Temporary extraction files
 └── var/
-    ├── catalog.json     # Cached Foojay catalog
+    ├── catalog.json     # Legacy cached Foojay catalog
+    ├── catalog-v2.json  # Cached multi-SDK catalog
     └── manifests/
-        └── java/        # Installation metadata (one JSON per version)
+        ├── java/        # Installation metadata (one JSON per version)
+        ├── gradle/
+        ├── maven/
+        └── kotlin/
 ```
 
 ### `config.json`
@@ -482,6 +552,10 @@ jwmv stores its data under `~/.jwmv/`:
   "autoEnvEnabled": true,
   "defaultShell": "powershell",
   "defaultJavaAlias": "21-tem",
+  "defaultVersions": {
+    "java": "21-tem",
+    "gradle": "9.5.1"
+  },
   "selfUpdateRepository": "stescobedo92/jwmv"
 }
 ```
@@ -492,7 +566,8 @@ jwmv stores its data under `~/.jwmv/`:
 | `catalogRefreshHours`        | `6`            | Hours before catalog auto-refreshes           |
 | `autoEnvEnabled`             | `true`         | Enable `.jwmvrc` auto-switching               |
 | `defaultShell`               | `"powershell"` | Shell for script generation                   |
-| `defaultJavaAlias`           | —              | Persistent default Java version               |
+| `defaultJavaAlias`           | —              | Legacy persistent default Java version        |
+| `defaultVersions`            | `{}`           | Persistent defaults by SDK candidate          |
 | `selfUpdateRepository`       | —              | GitHub `owner/repo` for self-update           |
 
 ---
@@ -502,24 +577,34 @@ jwmv stores its data under `~/.jwmv/`:
 ### Managing a multi-project workflow
 
 ```powershell
-# Project A needs Java 17
+# Project A needs Java 17 and Maven
 cd ~\examples\legacy-app
-echo "17-cor" > .jwmvrc
+@"
+java=17-cor
+maven=3.9.15
+"@ > .jwmvrc
 
-# Project B needs Java 21
+# Project B needs Java 21 and Gradle
 cd ~\examples\modern-api
-echo "21-tem" > .jwmvrc
+@"
+java=21-tem
+gradle=9.5.1
+"@ > .jwmvrc
 
-# Install both versions
+# Install required SDKs
 jwmv install 17-cor
 jwmv install 21-tem --default
+jwmv install maven 3.9.15
+jwmv install gradle 9.5.1
 
-# With shell integration, Java switches automatically
+# With shell integration, SDKs switch automatically
 cd ~\examples\legacy-app
 java -version   # → Corretto 17
+mvn -version    # → Maven 3.9.15
 
 cd ~\examples\modern-api
 java -version   # → Temurin 21
+gradle -version # → Gradle 9.5.1
 ```
 ---
 
@@ -528,7 +613,7 @@ java -version   # → Temurin 21
 ```
 Jwmv.Cli            → Spectre.Console CLI commands and DI setup
 Jwmv.Core            → Interfaces, models, utilities (no dependencies)
-Jwmv.Infrastructure  → Foojay API client, storage, Windows integration
+Jwmv.Infrastructure  → SDK catalog providers, storage, Windows integration
 Jwmv.Tests           → XUnit tests
 ```
 

@@ -3,17 +3,21 @@ using Spectre.Console.Cli;
 
 namespace Jwmv.Cli.Commands;
 
-public sealed class HomeCommand(IJavaVersionManager manager) : AsyncCommand<HomeCommand.Settings>
+public sealed class HomeCommand(ISdkVersionManager manager) : AsyncCommand<HomeCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
-        [CommandArgument(0, "[identifier]")]
-        public string? Identifier { get; init; }
+        [CommandArgument(0, "[candidate-or-version]")]
+        public string? CandidateOrVersion { get; init; }
+
+        [CommandArgument(1, "[version]")]
+        public string? Version { get; init; }
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var home = await manager.GetJavaHomeAsync(settings.Identifier, cancellationToken);
+        var (candidateName, version) = CommandHelpers.ResolveCandidateAndVersion(settings.CandidateOrVersion, settings.Version);
+        var home = await manager.GetHomeAsync(candidateName, version, cancellationToken);
         if (!string.IsNullOrWhiteSpace(home))
         {
             Console.WriteLine(home);
