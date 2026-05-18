@@ -205,7 +205,25 @@ jobs:
         working-directory: npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance || echo "Package version already published, skipping."
+        shell: bash
+        run: |
+          set +e
+          output="$(npm publish --access public --provenance 2>&1)"
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if printf '%s\n' "$output" | grep -Eq 'EPUBLISHCONFLICT|previously published versions'; then
+            echo "Package version already published, skipping."
+            exit 0
+          fi
+
+          exit "$status"
 
   # ── Submit winget manifest via wingetcreate ────────────────────────────
   publish-winget:
