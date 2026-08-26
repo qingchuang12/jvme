@@ -1,1 +1,52 @@
-Nothing should be ignored based on the provided file changes. The only modified file is `install.ps1`, which appears to be a PowerShell script file and should not be added to .gitignore.
+```
+# Build artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.nupkg
+**/Debug/
+**/Release/
+
+# Dependencies
+packages/
+node_modules/
+vendor/
+
+# IDE
+.vs/
+.idea/
+*.userprefs
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+desktop.ini
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Test coverage
+coverage/
+*.cover
+*.gcda
+*.gcno
+*.profdata
+
+# Temporary files
+*.tmp
+*.temp
+*~
+```

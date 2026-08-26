@@ -29,27 +29,37 @@ public sealed class ListCommand(ISdkVersionManager manager, IAnsiConsole console
 
         var candidateName = CommandHelpers.IsKnownCandidate(settings.CandidateOrFilter) ? settings.CandidateOrFilter : "java";
         var filter = CommandHelpers.IsKnownCandidate(settings.CandidateOrFilter) ? settings.Filter : settings.CandidateOrFilter;
+        
+        // Force refresh when listing a specific candidate to ensure we have fresh data
+        var forceRefresh = settings.Refresh || !string.IsNullOrWhiteSpace(settings.CandidateOrFilter);
+        
         var sdkAvailable = await manager.ListAvailableAsync(new SdkCatalogQuery
         {
             CandidateName = candidateName,
             VersionFilter = filter,
-            ForceRefresh = settings.Refresh
+            ForceRefresh = forceRefresh
         }, cancellationToken);
         var installed = await manager.ListInstalledAsync(candidateName, cancellationToken);
         var current = await manager.ResolveCurrentAsync(candidateName!, null, cancellationToken);
         var installedAliases = installed.ToDictionary(item => item.Alias, StringComparer.OrdinalIgnoreCase);
         var wide = CommandHelpers.IsWide(console);
         var medium = CommandHelpers.IsMediumOrWider(console);
+        var isJava = string.Equals(candidateName, "java", StringComparison.OrdinalIgnoreCase);
 
         var table = CommandHelpers.CreateTable();
-        if (medium)
+        if (medium && !isJava)
         {
             table.AddColumn(CommandHelpers.Header("Candidate"));
         }
 
         table.AddColumn(CommandHelpers.Header("Version"));
         table.AddColumn(CommandHelpers.Header("Alias"));
-        if (wide)
+        if (wide && isJava)
+        {
+            table.AddColumn(CommandHelpers.Header("Java"));
+            table.AddColumn(CommandHelpers.Header("Vendor"));
+        }
+        else if (wide)
         {
             table.AddColumn(CommandHelpers.Header("Support"));
         }
@@ -70,14 +80,19 @@ public sealed class ListCommand(ISdkVersionManager manager, IAnsiConsole console
             }
 
             var row = new List<string>();
-            if (medium)
+            if (medium && !isJava)
             {
                 row.Add(CommandHelpers.Candidate(package.CandidateName));
             }
 
             row.Add(CommandHelpers.Version(package.Version));
             row.Add(CommandHelpers.Alias(package.Alias));
-            if (wide)
+            if (wide && isJava)
+            {
+                row.Add(CommandHelpers.Version(package.JavaVersion));
+                row.Add(CommandHelpers.Text(package.Distribution));
+            }
+            else if (wide)
             {
                 row.Add(CommandHelpers.Support(package.SupportTerm));
             }

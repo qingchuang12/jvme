@@ -106,7 +106,8 @@ if (-not $SkipBuild) {
     try {
         # Build and publish as single-file executable
         $publishDir = Join-Path $scriptDir "publish"
-        dotnet publish $projectPath -c $Configuration --self-contained true -r $arch /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o "$publishDir"
+        Write-Host "Publishing to: $publishDir" -ForegroundColor Gray
+        dotnet publish $projectPath -c $Configuration --no-restore
         
         if ($LASTEXITCODE -ne 0) {
             throw "Build failed with exit code $LASTEXITCODE"
