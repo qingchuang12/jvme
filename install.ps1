@@ -1,186 +1,196 @@
 # JWMV 本地安装脚本 (PowerShell)
-# 用于在 Windows 上编译并安装 JWMV 工具
+# 用法: .\install.ps1
+# 卸载: .\install.ps1 -Uninstall
 
+[CmdletBinding()]
 param(
     [switch]$Uninstall,
     [switch]$Verbose
 )
 
 $ErrorActionPreference = "Stop"
-$PublishDir = "$PSScriptRoot\publish"
 $InstallDir = "$env:LOCALAPPDATA\jwmv"
 $ExeName = "jwmv.exe"
-$LogPrefix = "[JWMV Installer]"
+$PublishDir = "$PSScriptRoot\publish"
 
 function Write-Log {
-    param([string]$Message, [string]$Level = "INFO")
+    param(
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
     $timestamp = Get-Date -Format "HH:mm:ss"
     $color = switch ($Level) {
-        "INFO" { "Cyan" }
-        "SUCCESS" { "Green" }
-        "WARNING" { "Yellow" }
         "ERROR" { "Red" }
-        default { "White" }
+        "WARN"  { "Yellow" }
+        "SUCCESS" { "Green" }
+        default { "Cyan" }
     }
-    Write-Host "$timestamp $LogPrefix [$Level] $Message" -ForegroundColor $color
+    Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $color
 }
 
 function Test-Prerequisites {
     Write-Log "检查前置条件..."
     
-    # 检查 .NET SDK
+    # 检查 dotnet 命令
     try {
         $dotnetVersion = dotnet --version 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "dotnet 命令不可用"
         }
         
-        # 检查是否为 .NET 8
         if ($dotnetVersion -notmatch "^8\.") {
-            Write-Log "警告：检测到 .NET 版本 $dotnetVersion，推荐 .NET 8.x" "WARNING"
+            Write-Log "警告：检测到 .NET 版本 $dotnetVersion，推荐 .NET 8.x" -Level WARN
         } else {
-            Write-Log "检测到 .NET SDK 版本：$dotnetVersion" "SUCCESS"
+            Write-Log ".NET SDK 版本: $dotnetVersion" -Level SUCCESS
         }
     } catch {
-        Write-Log "未找到 .NET SDK，请先安装 .NET 8 SDK" "ERROR"
-        Write-Log "下载地址：https://dotnet.microsoft.com/download/dotnet/8.0" "WARNING"
+        Write-Log "错误：未找到 .NET 8 SDK" -Level ERROR
+        Write-Log "请从 https://dotnet.microsoft.com/download 安装 .NET 8 SDK" -Level ERROR
         exit 1
     }
     
     # 检查源码目录
     if (!(Test-Path "$PSScriptRoot\src\Jwmv.Cli")) {
-        Write-Log "未找到源码目录，请确保在 JWMV 项目根目录运行此脚本" "ERROR"
+        Write-Log "错误：未找到源码目录，请在项目根目录运行此脚本" -Level ERROR
         exit 1
     }
 }
 
-function Install-Jwmv {
-    Write-Log "开始安装 JWMV..."
+function Publish-Jwmv {
+    Write-Log "正在编译发布 JWMV..."
     
-    # 1. 发布项目
-    Write-Log "正在编译发布 JWMV..." 
-    dotnet publish `
-        src/Jwmv.Cli/Jwmv.Cli.csproj `
-        -c Release `
-        -r win-x64 `
-        --self-contained false `
-        -o $PublishDir `
-        --nologo `
-        $(if ($Verbose) { "-v:d" } else { "-v:q" })
+    $publishArgs = @(
+        "publish",
+        "src/Jwmv.Cli/Jwmv.Cli.csproj",
+        "-c", "Release",
+        "-r", "win-x64",
+        "--self-contained", "false",
+        "-o", $PublishDir,
+        "--nologo"
+    )
+    
+    & dotnet $publishArgs
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Log "编译失败！请检查上述错误信息。" "ERROR"
+        Write-Log "编译失败！" -Level ERROR
         exit 1
     }
     
     if (!(Test-Path "$PublishDir\$ExeName")) {
-        Write-Log "编译成功但未找到 $ExeName，发布目录可能有问题" "ERROR"
+        Write-Log "编译成功但未找到可执行文件" -Level ERROR
         exit 1
     }
     
-    Write-Log "编译成功" "SUCCESS"
-    
-    # 2. 创建安装目录
+    Write-Log "编译完成" -Level SUCCESS
+}
+
+function Install-Jwmv {
     Write-Log "正在安装到 $InstallDir ..."
+    
+    # 创建安装目录
     if (!(Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-        Write-Log "创建安装目录：$InstallDir"
     }
     
-    # 3. 复制文件
+    # 复制文件
     Copy-Item -Path "$PublishDir\*" -Destination $InstallDir -Force
-    $fileCount = (Get-ChildItem $PublishDir).Count
-    Write-Log "已复制 $fileCount 个文件到安装目录" "SUCCESS"
     
-    # 4. 配置环境变量
+    Write-Log "文件已复制到 $InstallDir" -Level SUCCESS
+}
+
+function Add-ToPath {
+    Write-Log "配置环境变量..."
+    
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    $needsUpdate = $userPath -notlike "*$InstallDir*"
     
-    if ($needsUpdate) {
-        Write-Log "正在添加环境变量..."
+    # 检查是否已存在
+    $paths = $userPath -split ';' | Where-Object { $_ -and $_.Trim() }
+    $exists = $paths -contains $InstallDir
+    
+    if (!$exists) {
         $newPath = "$userPath;$InstallDir"
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        Write-Log "已将 $InstallDir 添加到用户 PATH" "SUCCESS"
-        
-        Write-Log "⚠️  重要提示：" "WARNING"
-        Write-Log "   环境变量修改仅对新启动的进程生效。" "WARNING"
-        Write-Log "   请【关闭并重新打开】PowerShell 窗口后运行 'jwmv' 命令。" "WARNING"
-        
-        # 尝试在当前会话中立即生效（仅当前窗口）
-        $env:Path += ";$InstallDir"
-        Write-Log "已在当前会话中临时生效（无需重启终端即可测试）" "INFO"
+        Write-Log "已添加到用户 PATH" -Level SUCCESS
+        Write-Log "注意：当前终端窗口无法立即识别 'jwmv' 命令" -Level WARN
+        Write-Log "请关闭并重新打开一个新的 PowerShell 窗口" -Level WARN
     } else {
-        Write-Log "环境变量已存在，跳过配置" "INFO"
+        Write-Log "PATH 中已存在该路径" -Level INFO
     }
+}
+
+function Remove-FromPath {
+    Write-Log "从环境变量中移除..."
     
-    # 5. 验证安装
-    Write-Log "验证安装..."
-    $jwmvPath = "$InstallDir\$ExeName"
-    if (Test-Path $jwmvPath) {
-        $versionInfo = & $jwmvPath --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "安装成功！版本：$versionInfo" "SUCCESS"
-        } else {
-            Write-Log "安装完成但版本检查失败，请手动运行 '$jwmvPath --version' 排查" "WARNING"
-        }
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $paths = $userPath -split ';' | Where-Object { 
+        $_ -and $_.Trim() -and $_ -ne $InstallDir -and $_ -ne "$InstallDir\" 
     }
+    $newPath = $paths -join ';'
     
-    Write-Log "🎉 安装完成！" "SUCCESS"
-    Write-Log "下一步操作：" "INFO"
-    Write-Log "  1. 重启 PowerShell 窗口（或当前窗口已临时生效）" "INFO"
-    Write-Log "  2. 运行 'jwmv doctor' 检查环境" "INFO"
-    Write-Log "  3. 运行 'jwmv list java' 查看可用 JDK 版本" "INFO"
-    Write-Log "  4. 运行 'jwmv install java 21-tem' 安装 JDK 21" "INFO"
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+    Write-Log "已从用户 PATH 移除" -Level SUCCESS
 }
 
 function Uninstall-Jwmv {
-    Write-Log "开始卸载 JWMV..."
+    Write-Log "开始卸载 JWMV..." -Level WARN
     
-    # 1. 从 PATH 中移除
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($userPath -like "*$InstallDir*") {
-        Write-Log "正在从 PATH 中移除安装目录..."
-        $newPath = ($userPath -split ';' | Where-Object { $_ -ne $InstallDir -and $_ -ne "$InstallDir\" }) -join ';'
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        Write-Log "已从用户 PATH 中移除" "SUCCESS"
-        
-        # 同时更新当前会话
-        $env:Path = $newPath
-    } else {
-        Write-Log "PATH 中未找到安装目录，跳过" "INFO"
+    # 从 PATH 移除
+    if ([Environment]::GetEnvironmentVariable("Path", "User") -like "*$InstallDir*") {
+        Remove-FromPath
     }
     
-    # 2. 删除安装目录
+    # 删除安装目录
     if (Test-Path $InstallDir) {
-        Write-Log "正在删除安装目录：$InstallDir"
         Remove-Item -Path $InstallDir -Recurse -Force
-        Write-Log "已删除安装目录" "SUCCESS"
+        Write-Log "已删除安装目录" -Level SUCCESS
+    }
+    
+    Write-Log "卸载完成" -Level SUCCESS
+}
+
+function Verify-Installation {
+    Write-Log "验证安装..."
+    
+    # 注意：当前进程无法读取刚修改的 PATH，需要提示用户重启终端
+    Write-Log "安装位置：$InstallDir" -Level INFO
+    Write-Log "可执行文件：$InstallDir\$ExeName" -Level INFO
+    
+    if (Test-Path "$InstallDir\$ExeName") {
+        Write-Log "✓ 可执行文件存在" -Level SUCCESS
     } else {
-        Write-Log "安装目录不存在，跳过" "INFO"
+        Write-Log "✗ 可执行文件不存在" -Level ERROR
+        exit 1
     }
     
-    # 3. 清理发布目录（可选）
-    if (Test-Path $PublishDir) {
-        Write-Log "清理发布目录..."
-        Remove-Item -Path $PublishDir -Recurse -Force
-    }
-    
-    Write-Log "👋 卸载完成！" "SUCCESS"
-    Write-Log "如需重新安装，请再次运行此脚本（不带 -Uninstall 参数）" "INFO"
+    Write-Log ""
+    Write-Log "========================================" -Level INFO
+    Write-Log "安装成功！" -Level SUCCESS
+    Write-Log "========================================" -Level INFO
+    Write-Log ""
+    Write-Log "下一步操作：" -Level INFO
+    Write-Log "1. 关闭当前 PowerShell 窗口" -Level INFO
+    Write-Log "2. 重新打开一个新的 PowerShell 窗口" -Level INFO
+    Write-Log "3. 运行以下命令验证：" -Level INFO
+    Write-Log "   jwmv --version" -Level INFO
+    Write-Log "   jwmv doctor" -Level INFO
+    Write-Log "   jwmv list java" -Level INFO
+    Write-Log ""
 }
 
 # 主逻辑
 try {
     if ($Uninstall) {
         Uninstall-Jwmv
-    } else {
-        Test-Prerequisites
-        Install-Jwmv
+        exit 0
     }
+    
+    Test-Prerequisites
+    Publish-Jwmv
+    Install-Jwmv
+    Add-ToPath
+    Verify-Installation
+    
 } catch {
-    Write-Log "发生错误：$($_.Exception.Message)" "ERROR"
-    if ($Verbose) {
-        Write-Log $_.ScriptStackTrace "ERROR"
-    }
+    Write-Log "安装过程中发生错误：$_" -Level ERROR
     exit 1
 }
