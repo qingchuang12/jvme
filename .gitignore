@@ -1,1 +1,13 @@
-Nothing needs to be added to .gitignore since only a PowerShell script file (install.ps1) was modified, which is a source code file that should not be ignored.
+```
+# PowerShell related
+*.psd1
+*.psm1
+*.pssc
+*.psrc
+*.clixml
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+$RECYCLE.BIN/
+```
