@@ -1,41 +1,36 @@
-```
+```gitignore
 # Build artifacts
 bin/
 obj/
 *.exe
 *.dll
 *.pdb
-*.nupkg
-*.snupkg
+*.exe.config
 
 # Dependencies
 packages/
-node_modules/
-.nuget/
 
 # Logs
 *.log
-**/logs/
 
-# Environment
-.env
-.env.local
-*.env.*
+# Temporary files
+*.tmp
+*.temp
+```
 
-# OS generated files
-.DS_Store
-Thumbs.db
+Wait, let me reconsider. Looking at the changes again:
 
-# Editor/IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+```gitignore
+# Build artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.exe.config
 
-# Test coverage
-coverage/
-htmlcov/
-*.coverage
+# Dependencies
+packages/
 
 # Temporary files
 *.tmp

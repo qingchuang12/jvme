@@ -1,14 +1,14 @@
 #!/usr/bin/env pwsh
 # jwmv Local Build & Install Script
-# Builds jwmv from source and installs it on this machine
+# Builds jwmv from local source code and installs it on this machine
 # 
-# Usage: .\build-and-install.ps1 [-Configuration <Debug|Release>] [-InstallDir <path>] [-NoPath] [-SkipBuild]
+# Usage: .\install.ps1 [-Configuration <Debug|Release>] [-InstallDir <path>] [-NoPath] [-SkipBuild]
 #
 # Examples:
-#   .\build-and-install.ps1                        # Build Release and install to default location
-#   .\build-and-install.ps1 -Configuration Debug   # Build Debug configuration
-#   .\build-and-install.ps1 -SkipBuild             # Skip build, just install existing binary
-#   .\build-and-install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
+#   .\install.ps1                        # Build Release and install to default location
+#   .\install.ps1 -Configuration Debug   # Build Debug configuration
+#   .\install.ps1 -SkipBuild             # Skip build, just install existing binary
+#   .\install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
 
 param(
     [ValidateSet("Debug", "Release")]
@@ -26,10 +26,10 @@ function Show-Help {
 jwmv Local Build & Install Script
 ==================================
 
-Builds jwmv from source and installs it on this machine.
+Builds jwmv from local source code and installs it on this machine.
 
 USAGE:
-    .\build-and-install.ps1 [-Configuration <Debug|Release>] [-InstallDir <path>] [-NoPath] [-SkipBuild]
+    .\install.ps1 [-Configuration <Debug|Release>] [-InstallDir <path>] [-NoPath] [-SkipBuild]
 
 PARAMETERS:
     -Configuration   Build configuration (Debug or Release, default: Release)
@@ -39,10 +39,10 @@ PARAMETERS:
     -Help            Show this help message
 
 EXAMPLES:
-    .\build-and-install.ps1                           # Build Release and install to default location
-    .\build-and-install.ps1 -Configuration Debug      # Build Debug configuration
-    .\build-and-install.ps1 -SkipBuild                # Skip build, just install existing binary
-    .\build-and-install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
+    .\install.ps1                           # Build Release and install to default location
+    .\install.ps1 -Configuration Debug      # Build Debug configuration
+    .\install.ps1 -SkipBuild                # Skip build, just install existing binary
+    .\install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
 
 REQUIREMENTS:
     - .NET 8 SDK or later
@@ -93,7 +93,7 @@ Write-Host ""
 
 # Build
 if (-not $SkipBuild) {
-    Write-Host "Building jwmv ($Configuration)..." -ForegroundColor Yellow
+    Write-Host "Building jwmv from local source ($Configuration)..." -ForegroundColor Yellow
     
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
     $projectPath = Join-Path $scriptDir "src\Jwmv.Cli\Jwmv.Cli.csproj"
@@ -215,8 +215,8 @@ if (-not $NoPath) {
 
 Write-Host ""
 Write-Host "Quick Start:" -ForegroundColor Cyan
-Write-Host "  jwmv candidates              # List supported SDK candidates" -ForegroundColor White
-Write-Host "  jwmv list                    # List available Java versions" -ForegroundColor White
+Write-Host "  jwmv list                    # List supported SDK candidates" -ForegroundColor White
+Write-Host "  jwmv list java               # List available Java versions" -ForegroundColor White
 Write-Host "  jwmv install 21-tem          # Install Java 21 (Temurin)" -ForegroundColor White
 Write-Host "  jwmv use 21-tem              # Switch to Java 21" -ForegroundColor White
 Write-Host "  java -version                # Verify installation" -ForegroundColor White
