@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="Spectre.Console.Cli" />
+    <PackageReference Include="System.Management" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
   <ItemGroup>
