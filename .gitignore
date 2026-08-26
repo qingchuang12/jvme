@@ -1,132 +1,19 @@
-```
-# Build artifacts
-bin/
-obj/
-*.dll
-*.exe
-*.pdb
-*.so
-*.dylib
-*.jar
-*.war
-*.class
-*.o
-*.obj
-*.out
-*.a
-*.lib
-*.obj
-*.ilk
-*.exp
-*.map
-
-# Dependencies
-packages/
-node_modules/
-.nuget/
-.npm/
-.yarn/
-bower_components/
-vendor/
-
-# IDE specific
-.vs/
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-log/
-
-# Environment
-.env
-.env.local
-.env.*
-!.env.example
-
-# Test and coverage
-coverage/
-htmlcov/
-.coverage
-*.coverage
-.nyc_output/
-istanbul/
-
-# OS generated
-.DS_Store
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
+```powershell
+# PowerShell modules and dependencies
+Modules/
 # Temporary files
 *.tmp
 *.temp
-*.bak
-*.cache
-*.lock
-*.pid
-*.seed
-*.session
-*.dump
-
-# Build directories
-dist/
-build/
-target/
-out/
-release/
-debug/
-x64/
-x86/
-arm64/
-
-# Python specific
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
+# Logs
 *.log
-.git/modules/
-*.sublime-workspace
-
-# Dotnet specific
-**/[Dd]ebug/
-**/[Dd]ebugPublic/
-**/[Rr]elease/
-**/[Rr]eleases/
-**/x64/
-**/x86/
-**/ARM/
-**/ARM64/
-**/AnyCPU/
-**/publish/
-**/*.user
-**/*.userosscache
-**/*.sln.docstates
-**/.vs/
-**/.idea/
-**/bin/
-**/obj/
-**/logs/
-**/artifacts/
-**/TestResults/
-**/*.trx
+# Environment files
+.env
+.env.local
+*.env.*
+# Backup files
+*.bak
+*.backup
+# Processed/compiled files
+*.psm1~
+*.psd1~
 ```
