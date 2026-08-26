@@ -1,1 +1,43 @@
-Nothing needs to be added to .gitignore for this change list. The added file 'install.ps1' is a PowerShell script file which should typically be tracked in version control as it's likely a legitimate part of the project's installation process. Since there are no build artifacts, dependency directories, temporary files, or other items that should be ignored, the .gitignore remains empty.
+```
+# Build artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.nupkg
+*.snupkg
+
+# Dependencies
+packages/
+node_modules/
+.nuget/
+
+# Logs
+*.log
+**/logs/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+htmlcov/
+*.coverage
+
+# Temporary files
+*.tmp
+*.temp
+```

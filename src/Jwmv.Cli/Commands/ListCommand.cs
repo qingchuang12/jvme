@@ -21,6 +21,12 @@ public sealed class ListCommand(ISdkVersionManager manager, IAnsiConsole console
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        // If no arguments provided, show all candidates like SDKMAN's "sdk list" without arguments
+        if (string.IsNullOrWhiteSpace(settings.CandidateOrFilter) && string.IsNullOrWhiteSpace(settings.Filter))
+        {
+            return await ShowCandidatesAsync(cancellationToken);
+        }
+
         var candidateName = CommandHelpers.IsKnownCandidate(settings.CandidateOrFilter) ? settings.CandidateOrFilter : "java";
         var filter = CommandHelpers.IsKnownCandidate(settings.CandidateOrFilter) ? settings.Filter : settings.CandidateOrFilter;
         var sdkAvailable = await manager.ListAvailableAsync(new SdkCatalogQuery
@@ -82,6 +88,56 @@ public sealed class ListCommand(ISdkVersionManager manager, IAnsiConsole console
 
         console.Write(table);
         CommandHelpers.WriteSuccess(console, $"{sdkAvailable.Count} package(s) shown, {installed.Count} installed locally.");
+        return 0;
+    }
+
+    private async Task<int> ShowCandidatesAsync(CancellationToken cancellationToken)
+    {
+        var candidates = await manager.ListCandidatesAsync(null, cancellationToken);
+        var wide = CommandHelpers.IsWide(console);
+        var medium = CommandHelpers.IsMediumOrWider(console);
+
+        console.MarkupLine("[bold deepskyblue1]SDK candidates[/] [grey]for jwmv[/]");
+        console.MarkupLine("[grey]Use[/] [blue]jwmv list <candidate>[/] [grey]to see available versions.[/]");
+
+        var table = CommandHelpers.CreateTable();
+        table.AddColumn(CommandHelpers.Header("Candidate"));
+        table.AddColumn(CommandHelpers.Header("Latest"));
+        table.AddColumn(CommandHelpers.Header("Description"));
+        if (medium)
+        {
+            table.AddColumn(CommandHelpers.Header("Website"));
+        }
+
+        if (wide)
+        {
+            table.AddColumn(CommandHelpers.Header("Try"));
+        }
+
+        foreach (var candidate in candidates)
+        {
+            var row = new List<string>
+            {
+                CommandHelpers.Candidate(candidate.Name),
+                CommandHelpers.Version(candidate.LatestVersion),
+                CommandHelpers.Text(CommandHelpers.Shorten(candidate.Description, wide ? 44 : 28))
+            };
+
+            if (medium)
+            {
+                row.Add(CommandHelpers.Url(candidate.WebsiteUri));
+            }
+
+            if (wide)
+            {
+                row.Add($"[grey]jwmv list[/] [blue]{Markup.Escape(candidate.Name)}[/]");
+            }
+
+            table.AddRow(row.ToArray());
+        }
+
+        console.Write(table);
+        CommandHelpers.WriteSuccess(console, $"{candidates.Count} candidate(s) shown.");
         return 0;
     }
 }

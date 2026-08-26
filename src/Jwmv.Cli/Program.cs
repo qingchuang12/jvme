@@ -41,7 +41,7 @@ public static class Program
 
             config.AddCommand<ListCommand>("list")
                 .WithAlias("ls")
-                .WithDescription("Lists available SDK versions and local installations.")
+                .WithDescription("Lists available SDK versions and local installations. Run without arguments to show all candidates.")
                 .WithExample("list")
                 .WithExample("list", "gradle")
                 .WithExample("list", "21-tem")

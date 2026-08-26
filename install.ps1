@@ -1,18 +1,21 @@
 #!/usr/bin/env pwsh
-# jwmv Local Install Script
-# Installs jwmv (Java Version Manager for Windows) on this machine
+# jwmv Local Build & Install Script
+# Builds jwmv from source and installs it on this machine
 # 
-# Usage: .\install.ps1 [-Version <version>] [-InstallDir <path>] [-NoPath]
+# Usage: .\build-and-install.ps1 [-Configuration <Debug|Release>] [-InstallDir <path>] [-NoPath] [-SkipBuild]
 #
 # Examples:
-#   .\install.ps1                           # Install latest version to default location
-#   .\install.ps1 -Version 1.0.0            # Install specific version
-#   .\install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
+#   .\build-and-install.ps1                        # Build Release and install to default location
+#   .\build-and-install.ps1 -Configuration Debug   # Build Debug configuration
+#   .\build-and-install.ps1 -SkipBuild             # Skip build, just install existing binary
+#   .\build-and-install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
 
 param(
-    [string]$Version = "",
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Release",
     [string]$InstallDir = "",
     [switch]$NoPath,
+    [switch]$SkipBuild,
     [switch]$Help
 )
 
@@ -20,37 +23,30 @@ $ErrorActionPreference = "Stop"
 
 function Show-Help {
     @'
-jwmv Local Install Script
-=========================
+jwmv Local Build & Install Script
+==================================
 
-Installs jwmv (Java Version Manager for Windows) on this machine.
+Builds jwmv from source and installs it on this machine.
 
 USAGE:
-    .\install.ps1 [-Version <version>] [-InstallDir <path>] [-NoPath]
+    .\build-and-install.ps1 [-Configuration <Debug|Release>] [-InstallDir <path>] [-NoPath] [-SkipBuild]
 
 PARAMETERS:
-    -Version     Specific version to install (default: latest from GitHub)
-    -InstallDir  Custom installation directory (default: $HOME\.jwmv\bin)
-    -NoPath      Skip adding jwmv to PATH environment variable
-    -Help        Show this help message
+    -Configuration   Build configuration (Debug or Release, default: Release)
+    -InstallDir      Custom installation directory (default: $HOME\.jwmv\bin)
+    -NoPath          Skip adding jwmv to PATH environment variable
+    -SkipBuild       Skip build step, just install existing binary from bin folder
+    -Help            Show this help message
 
 EXAMPLES:
-    .\install.ps1                           # Install latest version to default location
-    .\install.ps1 -Version 1.0.0            # Install specific version
-    .\install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
+    .\build-and-install.ps1                           # Build Release and install to default location
+    .\build-and-install.ps1 -Configuration Debug      # Build Debug configuration
+    .\build-and-install.ps1 -SkipBuild                # Skip build, just install existing binary
+    .\build-and-install.ps1 -InstallDir $HOME\.tools  # Custom installation directory
 
-INSTALLATION METHODS:
-    This script downloads the pre-built binary from GitHub Releases.
-    Alternative installation methods:
-    
-    1. winget (recommended):
-       winget install stescobedo92.jwmv
-    
-    2. npm:
-       npm install -g @stescobedo9205/jwmv
-    
-    3. .NET global tool:
-       dotnet tool install -g jwmv
+REQUIREMENTS:
+    - .NET 8 SDK or later
+    - PowerShell 5.1 or later
 
 For more information, visit: https://github.com/stescobedo92/jwmv
 '@
@@ -59,17 +55,6 @@ For more information, visit: https://github.com/stescobedo92/jwmv
 
 if ($Help) {
     Show-Help
-}
-
-function Get-LatestVersion {
-    $releasesUrl = "https://api.github.com/repos/stescobedo92/jwmv/releases/latest"
-    try {
-        $response = Invoke-RestMethod -Uri $releasesUrl -Headers @{ "User-Agent" = "jwmv-installer" }
-        return $response.tag_name.TrimStart('v')
-    } catch {
-        Write-Warning "Failed to fetch latest version from GitHub API. Using fallback version."
-        return "1.0.0"
-    }
 }
 
 function Get-Architecture {
@@ -88,23 +73,68 @@ function Test-CommandExists($command) {
 }
 
 # Main installation logic
-Write-Host "jwmv Local Install Script" -ForegroundColor Cyan
-Write-Host "=========================" -ForegroundColor Cyan
+Write-Host "jwmv Local Build & Install Script" -ForegroundColor Cyan
+Write-Host "==================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Determine version
-if ([string]::IsNullOrEmpty($Version)) {
-    $Version = Get-LatestVersion
-    Write-Host "Latest version: v$Version" -ForegroundColor Green
-} else {
-    Write-Host "Installing version: v$Version" -ForegroundColor Green
+# Check for .NET SDK
+if (-not (Test-CommandExists "dotnet")) {
+    Write-Error ".NET SDK is required but not found. Please install .NET 8 SDK from: https://dotnet.microsoft.com/download"
+    exit 1
 }
 
-# Determine architecture and asset name
+$dotnetVersion = dotnet --version
+Write-Host ".NET SDK version: $dotnetVersion" -ForegroundColor Green
+
+# Determine architecture
 $arch = Get-Architecture
-$assetName = "jwmv-$arch.zip"
 Write-Host "Architecture: $arch" -ForegroundColor Green
-Write-Host "Asset: $assetName" -ForegroundColor Green
+Write-Host ""
+
+# Build
+if (-not $SkipBuild) {
+    Write-Host "Building jwmv ($Configuration)..." -ForegroundColor Yellow
+    
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $projectPath = Join-Path $scriptDir "src\Jwmv.Cli\Jwmv.Cli.csproj"
+    
+    if (-not (Test-Path $projectPath)) {
+        Write-Error "Project file not found: $projectPath"
+        exit 1
+    }
+    
+    try {
+        dotnet build $projectPath -c $Configuration --self-contained true -r $arch /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
+        
+        if ($LASTEXITCODE -ne 0) {
+            throw "Build failed with exit code $LASTEXITCODE"
+        }
+        
+        Write-Host "Build completed successfully." -ForegroundColor Green
+    } catch {
+        Write-Error "Failed to build jwmv: $_"
+        exit 1
+    }
+} else {
+    Write-Host "Skipping build step (-SkipBuild specified)." -ForegroundColor Yellow
+}
+
+# Find the built binary
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$binaryPath = Join-Path $scriptDir "src\Jwmv.Cli\bin\$Configuration\net8.0\$arch\publish\jwmv.exe"
+
+if (-not (Test-Path $binaryPath)) {
+    # Try alternative path structure
+    $binaryPath = Join-Path $scriptDir "src\Jwmv.Cli\bin\$Configuration\net8.0\publish\jwmv.exe"
+}
+
+if (-not (Test-Path $binaryPath)) {
+    Write-Error "Built binary not found at: $binaryPath"
+    Write-Host "Please run without -SkipBuild flag first to build the project." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "Binary found: $binaryPath" -ForegroundColor Green
 Write-Host ""
 
 # Determine installation directory
@@ -121,42 +151,26 @@ Write-Host ""
 Write-Host "Creating installation directory..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-# Download URL
-$downloadUrl = "https://github.com/stescobedo92/jwmv/releases/download/v$Version/$assetName"
-$zipPath = Join-Path $InstallDir $assetName
 $exePath = Join-Path $InstallDir "jwmv.exe"
 
 # Check if already installed
 if (Test-Path $exePath) {
     Write-Host "jwmv is already installed at: $exePath" -ForegroundColor Yellow
-    $overwrite = Read-Host "Do you want to reinstall? (y/n)"
+    $overwrite = Read-Host "Do you want to replace with the newly built version? (y/n)"
     if ($overwrite -ne 'y') {
         Write-Host "Installation cancelled." -ForegroundColor Red
         exit 0
     }
-    Write-Host "Reinstalling..." -ForegroundColor Yellow
+    Write-Host "Replacing..." -ForegroundColor Yellow
 }
 
-# Download
-Write-Host "Downloading jwmv v$Version from GitHub..." -ForegroundColor Yellow
+# Copy binary
+Write-Host "Copying binary to installation directory..." -ForegroundColor Yellow
 try {
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
-    Write-Host "Download complete." -ForegroundColor Green
+    Copy-Item -Path $binaryPath -Destination $exePath -Force
+    Write-Host "Copy complete." -ForegroundColor Green
 } catch {
-    Write-Error "Failed to download jwmv: $_"
-    Write-Host ""
-    Write-Host "Manual download available at: https://github.com/stescobedo92/jwmv/releases" -ForegroundColor Cyan
-    exit 1
-}
-
-# Extract
-Write-Host "Extracting..." -ForegroundColor Yellow
-try {
-    Expand-Archive -Path $zipPath -DestinationPath $InstallDir -Force
-    Remove-Item -Path $zipPath -Force
-    Write-Host "Extraction complete." -ForegroundColor Green
-} catch {
-    Write-Error "Failed to extract jwmv: $_"
+    Write-Error "Failed to copy jwmv: $_"
     exit 1
 }
 
@@ -167,7 +181,7 @@ if (-not (Test-Path $exePath)) {
 }
 
 Write-Host ""
-Write-Host "jwmv v$Version installed successfully!" -ForegroundColor Green
+Write-Host "jwmv installed successfully!" -ForegroundColor Green
 Write-Host "Binary location: $exePath" -ForegroundColor Cyan
 Write-Host ""
 
@@ -202,6 +216,7 @@ if (-not $NoPath) {
 Write-Host ""
 Write-Host "Quick Start:" -ForegroundColor Cyan
 Write-Host "  jwmv candidates              # List supported SDK candidates" -ForegroundColor White
+Write-Host "  jwmv list                    # List available Java versions" -ForegroundColor White
 Write-Host "  jwmv install 21-tem          # Install Java 21 (Temurin)" -ForegroundColor White
 Write-Host "  jwmv use 21-tem              # Switch to Java 21" -ForegroundColor White
 Write-Host "  java -version                # Verify installation" -ForegroundColor White
