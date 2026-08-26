@@ -104,13 +104,18 @@ if (-not $SkipBuild) {
     }
     
     try {
-        dotnet build $projectPath -c $Configuration --self-contained true -r $arch /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
+        # Build and publish as single-file executable
+        $publishDir = Join-Path $scriptDir "publish"
+        dotnet publish $projectPath -c $Configuration --self-contained true -r $arch /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o "$publishDir"
         
         if ($LASTEXITCODE -ne 0) {
             throw "Build failed with exit code $LASTEXITCODE"
         }
         
         Write-Host "Build completed successfully." -ForegroundColor Green
+        
+        # Update binary path to published location
+        $binaryPath = Join-Path $publishDir "jwmv.exe"
     } catch {
         Write-Error "Failed to build jwmv: $_"
         exit 1
@@ -119,19 +124,18 @@ if (-not $SkipBuild) {
     Write-Host "Skipping build step (-SkipBuild specified)." -ForegroundColor Yellow
 }
 
-# Find the built binary
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$binaryPath = Join-Path $scriptDir "src\Jwmv.Cli\bin\$Configuration\net8.0\$arch\publish\jwmv.exe"
-
-if (-not (Test-Path $binaryPath)) {
-    # Try alternative path structure
-    $binaryPath = Join-Path $scriptDir "src\Jwmv.Cli\bin\$Configuration\net8.0\publish\jwmv.exe"
-}
-
-if (-not (Test-Path $binaryPath)) {
-    Write-Error "Built binary not found at: $binaryPath"
-    Write-Host "Please run without -SkipBuild flag first to build the project." -ForegroundColor Yellow
-    exit 1
+# Find the built binary (already set during build step)
+# If SkipBuild was used, determine the path
+if ($SkipBuild) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $publishDir = Join-Path $scriptDir "publish"
+    $binaryPath = Join-Path $publishDir "jwmv.exe"
+    
+    if (-not (Test-Path $binaryPath)) {
+        Write-Error "Built binary not found at: $binaryPath"
+        Write-Host "Please run without -SkipBuild flag first to build the project." -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 Write-Host "Binary found: $binaryPath" -ForegroundColor Green
