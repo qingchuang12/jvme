@@ -29,10 +29,10 @@ public sealed class ListCommand(ISdkVersionManager manager, IAnsiConsole console
 
         var candidateName = CommandHelpers.IsKnownCandidate(settings.CandidateOrFilter) ? settings.CandidateOrFilter : "java";
         var filter = CommandHelpers.IsKnownCandidate(settings.CandidateOrFilter) ? settings.Filter : settings.CandidateOrFilter;
-        
+
         // Force refresh when listing a specific candidate to ensure we have fresh data
         var forceRefresh = settings.Refresh || !string.IsNullOrWhiteSpace(settings.CandidateOrFilter);
-        
+
         var sdkAvailable = await manager.ListAvailableAsync(new SdkCatalogQuery
         {
             CandidateName = candidateName,
@@ -89,8 +89,12 @@ public sealed class ListCommand(ISdkVersionManager manager, IAnsiConsole console
             row.Add(CommandHelpers.Alias(package.Alias));
             if (wide && isJava)
             {
-                row.Add(CommandHelpers.Version(package.JavaVersion));
-                row.Add(CommandHelpers.Text(package.Distribution));
+                // For Java, show version details from DisplayName or Version
+                var javaVersionDetails = package.DisplayName != package.Version
+                    ? package.DisplayName
+                    : package.Version;
+                row.Add(CommandHelpers.Text(javaVersionDetails));
+                row.Add(CommandHelpers.Text(package.Distribution ?? "N/A"));
             }
             else if (wide)
             {
