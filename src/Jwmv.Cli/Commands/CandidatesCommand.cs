@@ -26,7 +26,7 @@ public sealed class CandidatesCommand(ISdkVersionManager manager, IAnsiConsole c
         var medium = CommandHelpers.IsMediumOrWider(console);
 
         console.MarkupLine("[bold deepskyblue1]SDK candidates[/] [grey]for jwmv[/]");
-        console.MarkupLine("[grey]Use[/] [blue]jwmv list <candidate>[/] [grey]or pick one below when your terminal supports prompts.[/]");
+        console.MarkupLine("[grey]Use[/] [blue]jwmv list <candidate>[/] [grey]to see available versions.[/]");
 
         var table = CommandHelpers.CreateTable();
         table.AddColumn(CommandHelpers.Header("Candidate"));
@@ -58,7 +58,7 @@ public sealed class CandidatesCommand(ISdkVersionManager manager, IAnsiConsole c
 
             if (wide)
             {
-                row.Add($"[grey]jwmv install[/] [blue]{Markup.Escape(candidate.Name)}[/]");
+                row.Add($"[grey]jwmv list[/] [blue]{Markup.Escape(candidate.Name)}[/]");
             }
 
             table.AddRow(row.ToArray());
@@ -66,63 +66,6 @@ public sealed class CandidatesCommand(ISdkVersionManager manager, IAnsiConsole c
 
         console.Write(table);
         CommandHelpers.WriteSuccess(console, $"{candidates.Count} candidate(s) shown.");
-
-        if (ShouldPrompt(settings) && candidates.Count > 0)
-        {
-            await PromptForCandidateDetailsAsync(candidates.Select(candidate => candidate.Name), cancellationToken);
-        }
-        else if (settings.Interactive && !CommandHelpers.CanPrompt(console))
-        {
-            CommandHelpers.WriteWarning(console, "Interactive prompt is not available in this terminal.");
-        }
-
         return 0;
-    }
-
-    private bool ShouldPrompt(Settings settings) =>
-        !settings.NoInteractive &&
-        CommandHelpers.CanPrompt(console) &&
-        (settings.Interactive || string.IsNullOrWhiteSpace(settings.Filter));
-
-    private async Task PromptForCandidateDetailsAsync(IEnumerable<string> candidateNames, CancellationToken cancellationToken)
-    {
-        var exitLabel = "Exit";
-        var choices = candidateNames.Order(StringComparer.OrdinalIgnoreCase).Append(exitLabel).ToArray();
-        var selected = console.Prompt(
-            new SelectionPrompt<string>()
-                .Title("[bold]Inspect a candidate[/]")
-                .PageSize(Math.Min(8, choices.Length))
-                .HighlightStyle(new Style(Color.Black, Color.SpringGreen2))
-                .AddChoices(choices));
-
-        if (selected.Equals(exitLabel, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        var packages = await manager.ListAvailableAsync(new SdkCatalogQuery
-        {
-            CandidateName = selected
-        }, cancellationToken);
-
-        console.WriteLine();
-        console.MarkupLine($"[bold]{CommandHelpers.Candidate(selected)}[/] [grey]latest stable packages[/]");
-
-        var table = CommandHelpers.CreateTable();
-        table.AddColumn(CommandHelpers.Header("Version"));
-        table.AddColumn(CommandHelpers.Header("Alias"));
-        table.AddColumn(CommandHelpers.Header("Support"));
-
-        foreach (var package in packages.Take(8))
-        {
-            table.AddRow(
-                CommandHelpers.Version(package.Version),
-                CommandHelpers.Alias(package.Alias),
-                CommandHelpers.Support(package.SupportTerm));
-        }
-
-        console.Write(table);
-        var suggestedVersion = packages.Count > 0 ? packages[0].Alias : "<version>";
-        console.MarkupLine($"[grey]Next:[/] [blue]jwmv list {Markup.Escape(selected)}[/] [grey]or[/] [blue]jwmv install {Markup.Escape(selected)} {Markup.Escape(suggestedVersion)}[/]");
     }
 }

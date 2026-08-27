@@ -6,6 +6,13 @@
     <RootNamespace>Jwmv.Cli</RootNamespace>
     <Version>0.1.0</Version>
     <JwmvReleaseRepository Condition="'$(JwmvReleaseRepository)' == ''"></JwmvReleaseRepository>
+    
+    <!-- Publishing settings for single-file executable -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
     <!-- dotnet tool packaging -->
     <PackAsTool>true</PackAsTool>
